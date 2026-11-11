@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Receiver</title>
+<style>
+  :root { --fg:#1d2330; --muted:#5d6675; --line:#d9dee6; --bg:#f6f7f9; --card:#fff; --accent:#2457c5; --ok:#1d7a3e; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--fg); background:var(--bg); }
+  main { max-width:720px; margin:0 auto; padding:32px 16px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:16px; }
+  fieldset { border:0; padding:0; margin:0 0 16px; display:flex; gap:8px; flex-wrap:wrap; }
+  legend { font-weight:600; margin-bottom:8px; }
+  .type input { position:absolute; opacity:0; }
+  .type span { display:block; padding:8px 14px; border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+  .type input:checked + span { border-color:var(--accent); background:#eaf0fc; color:var(--accent); font-weight:600; }
+  .type input:focus-visible + span { outline:2px solid var(--accent); outline-offset:2px; }
+  .hint { color:var(--muted); font-size:13px; margin:-8px 0 16px; }
+  .pickers { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .pickers label { flex:1 1 200px; border:1px dashed var(--line); border-radius:8px; padding:12px; cursor:pointer; }
+  .pickers label strong { display:block; }
+  .pickers input { margin-top:6px; max-width:100%; }
+  #count { color:var(--muted); font-size:13px; margin-bottom:12px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 18px; font:inherit; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  #status { margin-left:12px; color:var(--muted); }
+  ul { padding-left:20px; margin:4px 0 12px; word-break:break-all; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Receiver</h1>
+  <p class="sub">Upload files or whole folders to S3.</p>
+
+  <form id="form" class="card">
+    <fieldset>
+      <legend>Data type</legend>
+      <label class="type"><input type="radio" name="type" value="zip" checked><span>ZIP</span></label>
+      <label class="type"><input type="radio" name="type" value="xlsx"><span>Excel (.xlsx)</span></label>
+      <label class="type"><input type="radio" name="type" value="other"><span>Other</span></label>
+    </fieldset>
+    <p class="hint" id="hint"></p>
+
+    <div class="pickers">
+      <label><strong>Files</strong><input type="file" id="files" multiple></label>
+      <label><strong>Folder</strong><input type="file" id="folder" webkitdirectory multiple></label>
+    </div>
+    <div id="count">No files selected.</div>
+
+    <button type="submit" id="submit" disabled>Upload</button><span id="status"></span>
+  </form>
+
+  <section id="results" class="card" hidden></section>
+</main>
+
+<script>
+  const hints = {
+    zip: "Stores each .zip and also extracts its contents next to it under upload/zip/.",
+    xlsx: "Accepts Excel workbooks (.xlsx) only. Stored under upload/xlsx/.",
+    other: "Accepts any file type. Stored under upload/other/."
+  };
+  const $ = (id) => document.getElementById(id);
+  const form = $("form"), filesIn = $("files"), folderIn = $("folder");
+
+  function selectedType() { return form.querySelector("input[name=type]:checked").value; }
+  function allFiles() { return [...filesIn.files, ...folderIn.files]; }
+  function refresh() {
+    $("hint").textContent = hints[selectedType()];
+    const n = allFiles().length;
+    $("count").textContent = n ? `${n} file${n === 1 ? "" : "s"} selected.` : "No files selected.";
+    $("submit").disabled = n === 0;
+  }
+  form.addEventListener("change", refresh);
+  refresh();
+
+  function list(title, items, cls) {
+    if (!items.length) return "";
+    const esc = (s) => s.replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+    return `<h3 class="${cls}">${title} (${items.length})</h3><ul>` +
+      items.map((i) => `<li>${esc(i)}</li>`).join("") + "</ul>";
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData();
+    for (const f of allFiles()) fd.append("files", f, f.webkitRelativePath || f.name);
+
+    $("submit").disabled = true;
+    $("status").textContent = "Uploading…";
+    const out = $("results");
+    try {
+      const res = await fetch(`/upload/${selectedType()}`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const data = await res.json();
+      out.innerHTML = list("Uploaded", data.uploaded, "ok") +
+        list("Rejected", data.rejected.map((r) => `${r.file}: ${r.reason}`), "bad") ||
+        "<p>Nothing was uploaded.</p>";
+      $("status").textContent = "Done.";
+      filesIn.value = ""; folderIn.value = "";
+    } catch (err) {
+      out.innerHTML = `<p class="bad">Upload failed: ${err.message}</p>`;
+      $("status").textContent = "";
+    }
+    out.hidden = false;
+    refresh();
+  });
+</script>
+</body>
+</html>

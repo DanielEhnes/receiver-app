@@ -1,0 +1,18 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: receiver-app
+  labels:
+    app: receiver-app
+  annotations:
+    # Default router timeout is 30s; large uploads/zip extraction need longer.
+    haproxy.router.openshift.io/timeout: 10m
+spec:
+  to:
+    kind: Service
+    name: receiver-app
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: receiver-app
+  labels:
+    app: receiver-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: receiver-app
+  template:
+    metadata:
+      labels:
+        app: receiver-app
+    spec:
+      containers:
+        - name: receiver-app
+          image: image-registry.openshift-image-registry.svc:5000/CHANGE-ME-NAMESPACE/receiver-app:0.1  # change me
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: receiver-app-config
+            - secretRef:
+                name: receiver-app-secret
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 512Mi
+            limits:
+              memory: 512Mi
+              ephemeral-storage: 2Gi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            # Uncomment together with the s3-ca volume below for a private-CA S3 endpoint.
+            # - name: s3-ca
+            #   mountPath: /etc/s3-ca
+            #   readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 2Gi
+        # - name: s3-ca
+        #   configMap:
+        #     name: s3-ca   # oc create configmap s3-ca --from-file=ca.crt=./ca.crt

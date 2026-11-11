@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: receiver-app-config
+  labels:
+    app: receiver-app
+data:
+  S3_ENDPOINT_URL: "https://s3.example.internal:9000"   # change me
+  S3_BUCKET: "receiver"                                 # change me
+  S3_REGION: "us-east-1"
+  S3_ROOT_PREFIX: "upload/"
+  # Uncomment if the S3 endpoint uses a private CA (see s3-ca volume in deployment.yaml)
+  # S3_CA_BUNDLE: "/etc/s3-ca/ca.crt"
+  S3_VERIFY_SSL: "true"
+  S3_CREATE_BUCKET: "false"
+  MAX_UNZIPPED_BYTES: "1073741824"
